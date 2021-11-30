@@ -37,7 +37,7 @@ N = 30
 K = 25
 ROBOT_NUM = 5
 BOX_NUM = K
-SHELF_NUM = math.ceil(BOX_NUM / 5)
+SHELF_NUM = (BOX_NUM // ROBOT_NUM) + 1#math.ceil(BOX_NUM / 5)
 MAP_W = M
 MAP_H = N
 MAX_STACK = 5
@@ -60,7 +60,7 @@ COLOR_BOX = 50
 COLOR_SHELF = 250
 COLOR_SHELF_BOX = 1
 
-MAX_GENERATIONS = 200
+MAX_GENERATIONS = 300
 MAX_NEIGHBOR = 4
 
 
@@ -142,6 +142,30 @@ class CellAgent(Agent):
         self.model.grid.move_agent(self, pos)
         self.uDir = dir
 
+    def findDirWander(self):
+        result = None
+        dir = self.uDir
+        for count in range(4):#no target, done wandering, do not stop
+            if(dir == DIR_UP):
+                pos = (self.pos[0], self.pos[1] + 1)
+            elif(dir == DIR_DOWN):
+                pos = (self.pos[0], self.pos[1] - 1)
+            elif(dir == DIR_LEFT):
+                pos = (self.pos[0] - 1, self.pos[1])
+            elif(dir == DIR_RIGHT):
+                pos = (self.pos[0] + 1, self.pos[1])
+            
+            if(not self.model.grid.out_of_bounds(pos)):
+                if(self.model.grid.is_cell_empty(pos)): 
+                    result = dir
+                    break
+            
+            dir += 1
+            if(dir >= 4):
+                dir = 0
+
+        return result
+
     def findDir(self):
         result = None
         options = set()
@@ -195,25 +219,7 @@ class CellAgent(Agent):
                     break 
         else:#target not found
             print("Target Not Found")
-            dir = self.uDir
-            for count in range(4):#no target, done wandering, do not stop
-                if(dir == DIR_UP):
-                    pos = (self.pos[0], self.pos[1] + 1)
-                elif(dir == DIR_DOWN):
-                    pos = (self.pos[0], self.pos[1] - 1)
-                elif(dir == DIR_LEFT):
-                    pos = (self.pos[0] - 1, self.pos[1])
-                elif(dir == DIR_RIGHT):
-                    pos = (self.pos[0] + 1, self.pos[1])
-                
-                if(not self.model.grid.out_of_bounds(pos)):
-                    if(self.model.grid.is_cell_empty(pos)): 
-                        result = dir
-                        break
-                
-                dir += 1
-                if(dir >= 4):
-                    dir = 0
+            result = self.findDirWander()#no target, done wandering, do not stop
 
         return result
 
@@ -288,6 +294,10 @@ class CellAgent(Agent):
                                 move_done = True
                             else:#really stuck there, surround by boxes
                                 print("Stuck with Box")
+                                if(len(neighbors) < MAX_NEIGHBOR):
+                                    dir = self.findDirWander()
+                                    if(dir != None):
+                                        self.move(dir)
                                 pass                                
 
             else:#without box
@@ -323,7 +333,7 @@ class WarehouseModel(Model):
     def __init__(self, width, height, num_robo, num_box):
         self.num_robo = num_robo
         self.num_box = num_box
-        self.num_shelf = math.ceil(num_box / num_robo)
+        self.num_shelf = (num_box // num_robo) + 1#math.ceil(num_box / num_robo)
         self.grid = SingleGrid(width, height, False)
         self.schedule = BaseScheduler(self)
 
@@ -388,6 +398,27 @@ class WarehouseModel(Model):
                 self.grid.place_agent(cell, (x, y))
                 self.schedule.add(cell)
     
+    def getAllRobot(self):
+        robot_list = list()
+        for cell in self.schedule.agents:
+            if(cell.loc_type == LOC_ROBO):
+                robot_list.append(cell)
+        return robot_list
+
+    def getAllBox(self):
+        box_list = list()
+        for cell in self.schedule.agents:
+            if(cell.loc_type == LOC_BOX):
+                box_list.append(cell)
+        return box_list
+
+    def getAllShelf(self):
+        shelf_list = list()
+        for cell in self.schedule.agents:
+            if(cell.loc_type == LOC_SHELF):
+                shelf_list.append(cell)
+        return shelf_list
+
     def findClosetShelf(self, robot):
         shelf_closest = None
         for (content, x, y) in self.grid.coord_iter():
