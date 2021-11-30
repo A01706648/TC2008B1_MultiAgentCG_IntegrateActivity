@@ -143,9 +143,9 @@ class CellAgent(Agent):
 
     def findDir(self):
         result = None
+        options = set()
+        dir = self.uDir
         for count in range(4):
-            dir = self.uDir
-
             if(dir == DIR_UP):
                 pos = (self.pos[0], self.pos[1] + 1)
             elif(dir == DIR_DOWN):
@@ -155,15 +155,44 @@ class CellAgent(Agent):
             elif(dir == DIR_RIGHT):
                 pos = (self.pos[0] + 1, self.pos[1])
             
-            if(self.model.grid.is_cell_empty(pos) and (not self.model.grid.out_of_bounds(pos))):
-                result = dir
-                break
+            if(not self.model.grid.out_of_bounds(pos)):
+                if(self.model.grid.is_cell_empty(pos)): 
+                    options.add(dir)
+                    break
             
             dir += 1
             if(dir >= 4):
                 dir = 0
 
+        target = None
+        if(self.bCarryBox):
+            target = self.model.findClosetShelf(self)
+        else:
+            target = self.model.findClosestBox(self)
+
+        if(target != None):
+            diff_x = target.pos[0] - self.pos[0]
+            diff_y = target.pos[1] - self.pos[1]
+            priority = list()
+            if(diff_x > 0):
+                priority.append(DIR_RIGHT)
+            elif(diff_x < 0):
+                priority.append(DIR_LEFT)
+
+            if(diff_y > 0):
+                priority.append(DIR_UP)
+            elif(diff_y < 0):
+                priority.append(DIR_RIGHT)
+
+            for dir in priority:
+                if(dir in options):
+                    result = dir
+                    break 
+        else:#target not found
+            print("Target Not Found")
+
         return result
+
 
     def pick(self, cell):
         if(self.box == 0 and self.bCarryBox == False):
@@ -198,6 +227,11 @@ class CellAgent(Agent):
             else:
                 self.box == 1
                 self.bCarryBox = True
+
+    def getDistance(self, cell):
+        diff_x = self.pos[0] - cell.pos[0]
+        diff_y = self.pos[1] - cell.pos[1]
+        return ((diff_x ** 2) + (diff_y ** 2))
 
 
     def step(self):
@@ -269,14 +303,16 @@ class WarehouseModel(Model):
     
         #assign robo location
         #print("w " + str(width) + ", h " + str(height))
+        #print("Grid " + str(self.grid.width) + ", " + str(self.grid.height))
         for count in range(num_robo):
             index = randrange(len(remain_grid))
             value = remain_grid[index]
             remain_grid.pop(index)
-            #y = value // width
-            #x = value % width 
-
-            (x, y) = self.grid.find_empty()
+            if(True):
+                y = value // width
+                x = value % width 
+            else:
+                (x, y) = self.grid.find_empty()
             #print(str(x) + ", " + str(y))
             cell = CellAgent(value, self, LOC_ROBO)
             self.grid.place_agent(cell, (x, y))
@@ -287,9 +323,11 @@ class WarehouseModel(Model):
             index = randrange(len(remain_grid))
             value = remain_grid[index]
             remain_grid.pop(index)
-            #x = value // width
-            #y = value % width 
-            (x, y) = self.grid.find_empty()
+            if(True):
+                y = value // width
+                x = value % width 
+            else:
+                (x, y) = self.grid.find_empty()
             cell = CellAgent(value, self, LOC_BOX)
             self.grid.place_agent(cell, (x, y))
             self.schedule.add(cell)
@@ -299,9 +337,11 @@ class WarehouseModel(Model):
             index = randrange(len(remain_grid))
             value = remain_grid[index]
             remain_grid.pop(index)
-            #x = value // width
-            #y = value % width 
-            (x, y) = self.grid.find_empty()
+            if(True):
+                y = value // width
+                x = value % width 
+            else:
+                (x, y) = self.grid.find_empty()
             cell = CellAgent(value, self, LOC_SHELF)
             self.grid.place_agent(cell, (x, y))
             self.schedule.add(cell)            
@@ -312,17 +352,41 @@ class WarehouseModel(Model):
                 index = randrange(len(remain_grid))
                 value = remain_grid[index]
                 remain_grid.pop(index)
-                x = value // width
-                y = value % width 
+                y = value // width
+                x = value % width 
                 cell = CellAgent(value, self, LOC_EMPTY)
                 self.grid.place_agent(cell, (x, y))
                 self.schedule.add(cell)
     
+    def findClosetShelf(self, robot):
+        shelf_closest = None
+        for (content, x, y) in self.grid.coord_iter():
+            if(content != None):
+                if(content.loc_type == LOC_SHELF and content.box < MAX_STACK):
+                    if(shelf_closest == None):
+                        shelf_closest = content
+                    else:
+                        if(robot.getDistance(shelf_closest) > robot.getDistance(content)):
+                            shelf_closest = content
+        return shelf_closest
+
+    def findClosestBox(self, robot):
+        box_closest = None
+        for (content, x, y) in self.grid.coord_iter():
+            if(content != None):
+                if(content.loc_type == LOC_BOX):
+                    if(box_closest == None):
+                        box_closest = content
+                    else:
+                        if(robot.getDistance(box_closest) > robot.getDistance(content)):
+                            box_closest = content
+        return box_closest
+
     def isDone(self):
         result = True
 
         for (content, x, y) in self.grid.coord_iter():
-            if(content.loc_type == LOC_ROBO):
+            if(content != None and content.loc_type == LOC_ROBO):
                 result = False
                 break
         return result
@@ -339,7 +403,7 @@ if __name__ == "__main__":
     for i in range(MAX_GENERATIONS):
         step_count += 1
         model.step()
-        if(model.isDone):
+        if(model.isDone()):
             break
 
     print("Time Spend: " + str(datetime.timedelta(seconds=(time.time() - start_time))))
