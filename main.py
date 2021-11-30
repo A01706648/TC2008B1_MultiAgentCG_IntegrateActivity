@@ -60,7 +60,7 @@ COLOR_BOX = 50
 COLOR_SHELF = 250
 COLOR_SHELF_BOX = 1
 
-MAX_GENERATIONS = 150
+MAX_GENERATIONS = 200
 MAX_NEIGHBOR = 4
 
 
@@ -195,6 +195,25 @@ class CellAgent(Agent):
                     break 
         else:#target not found
             print("Target Not Found")
+            dir = self.uDir
+            for count in range(4):#no target, done wandering, do not stop
+                if(dir == DIR_UP):
+                    pos = (self.pos[0], self.pos[1] + 1)
+                elif(dir == DIR_DOWN):
+                    pos = (self.pos[0], self.pos[1] - 1)
+                elif(dir == DIR_LEFT):
+                    pos = (self.pos[0] - 1, self.pos[1])
+                elif(dir == DIR_RIGHT):
+                    pos = (self.pos[0] + 1, self.pos[1])
+                
+                if(not self.model.grid.out_of_bounds(pos)):
+                    if(self.model.grid.is_cell_empty(pos)): 
+                        result = dir
+                        break
+                
+                dir += 1
+                if(dir >= 4):
+                    dir = 0
 
         return result
 
@@ -397,7 +416,10 @@ class WarehouseModel(Model):
         result = True
 
         for (content, x, y) in self.grid.coord_iter():
-            if(content != None and content.loc_type == LOC_ROBO):
+            if(content != None and content.loc_type == LOC_BOX):
+                result = False
+                break
+            if(content != None and content.loc_type == LOC_ROBO and content.box != 0):
                 result = False
                 break
         return result
