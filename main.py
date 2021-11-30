@@ -55,13 +55,13 @@ LOC_SHELF = 3
 
 COLOR_EMPTY = 0
 COLOR_ROBO = 10
-COLOR_ROBO_BOX = 10
+COLOR_ROBO_BOX = 15
 COLOR_BOX = 50
 COLOR_SHELF = 250
 COLOR_SHELF_BOX = 1
 
-MAX_GENERATIONS = 100
-
+MAX_GENERATIONS = 150
+MAX_NEIGHBOR = 4
 
 
 
@@ -94,6 +94,7 @@ class CellAgent(Agent):
         #property of robo
         self.uDir = DIR_UP
         self.bCarryBox = False
+        self.target = None
 
     def getDirTo(self, pos):
         result = None
@@ -111,7 +112,7 @@ class CellAgent(Agent):
 
     def routeTo(self, target, visited, dir, distance):
         result = None
-        neighbors = self.model.grid.get_neighbors(self.pos, moore = True, include_center = False)
+        neighbors = self.model.grid.get_neighbors(self.pos, moore = False, include_center = False)
         for neighbor in neighbors:
             if(neighbor.loc_type == target and neighbor.box < MAX_STACK):#found
                 result = (dir, distance)
@@ -158,21 +159,25 @@ class CellAgent(Agent):
             if(not self.model.grid.out_of_bounds(pos)):
                 if(self.model.grid.is_cell_empty(pos)): 
                     options.add(dir)
-                    break
             
             dir += 1
             if(dir >= 4):
                 dir = 0
 
-        target = None
-        if(self.bCarryBox):
-            target = self.model.findClosetShelf(self)
-        else:
-            target = self.model.findClosestBox(self)
+        if(self.target != None and self.target.pos == None):#box is moved
+            self.target = None
+        elif(self.target != None and self.target.loc_type == LOC_SHELF and self.target.box >= MAX_STACK):#shelf is full
+            self.target = None
 
-        if(target != None):
-            diff_x = target.pos[0] - self.pos[0]
-            diff_y = target.pos[1] - self.pos[1]
+        if(self.target == None):
+            if(self.bCarryBox):
+                self.target = self.model.findClosetShelf(self)
+            else:
+                self.target = self.model.findClosestBox(self)
+
+        if(self.target != None):
+            diff_x = self.target.pos[0] - self.pos[0]
+            diff_y = self.target.pos[1] - self.pos[1]
             priority = list()
             if(diff_x > 0):
                 priority.append(DIR_RIGHT)
@@ -182,7 +187,7 @@ class CellAgent(Agent):
             if(diff_y > 0):
                 priority.append(DIR_UP)
             elif(diff_y < 0):
-                priority.append(DIR_RIGHT)
+                priority.append(DIR_DOWN)
 
             for dir in priority:
                 if(dir in options):
@@ -195,6 +200,7 @@ class CellAgent(Agent):
 
 
     def pick(self, cell):
+        self.target = None
         if(self.box == 0 and self.bCarryBox == False):
             if(cell.loc_type == LOC_BOX and cell.box > 0):
                 cell.box -= 1
@@ -214,6 +220,7 @@ class CellAgent(Agent):
                 self.bCarryBox = True
 
     def put(self, cell):
+        self.target = None
         if(self.box == 1 and self.bCarryBox == True):
             if((cell.loc_type == LOC_BOX or cell.loc_type == LOC_SHELF) and cell.box < MAX_STACK):
                 cell.box += 1
@@ -238,13 +245,13 @@ class CellAgent(Agent):
         if(self.loc_type == LOC_ROBO):            
             move_done = False
             if(self.bCarryBox):#carry box
-                neighbors = self.model.grid.get_neighbors(self.pos, moore = True, include_center = False)
+                neighbors = self.model.grid.get_neighbors(self.pos, moore = False, include_center = False)
                 for neighbor in neighbors:
-                    if(neighbor.loc_type == LOC_SHELF):
+                    if(neighbor.loc_type == LOC_SHELF and neighbor.box < MAX_STACK):
                         self.put(neighbor)
                         move_done = True
                 if(move_done == False):
-                    if(len(neighbors) < 8):
+                    if(len(neighbors) < MAX_NEIGHBOR):
                         dir = self.findDir()
                         if(dir != None):
                             self.move(dir)
@@ -261,10 +268,11 @@ class CellAgent(Agent):
                                 self.put(neighbor_box_max)
                                 move_done = True
                             else:#really stuck there, surround by boxes
+                                print("Stuck with Box")
                                 pass                                
 
             else:#without box
-                neighbors = self.model.grid.get_neighbors(self.pos, moore = True, include_center = False)
+                neighbors = self.model.grid.get_neighbors(self.pos, moore = False, include_center = False)
                 neighbor_box_min = None
                 for neighbor in neighbors:#pick up the stack with min box
                     if(neighbor.loc_type == LOC_BOX):
@@ -281,6 +289,9 @@ class CellAgent(Agent):
                     if(dir != None):
                         self.move(dir)
                         move_done = True
+                    else:
+                        #print("No Dir no box")
+                        pass
                         
 
         
