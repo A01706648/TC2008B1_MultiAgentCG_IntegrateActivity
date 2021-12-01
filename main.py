@@ -4,6 +4,7 @@ from mesa import Agent, Model
 
 # Debido a que necesitamos que existe un solo agente por celda, elegimos ''SingleGrid''.
 from mesa.space import SingleGrid
+from mesa.space import MultiGrid
 
 # Con ''RandomActivation'', hacemos que todos los agentes se activen ''al mismo tiempo''.
 from mesa.time import RandomActivation
@@ -91,6 +92,9 @@ class CellAgent(Agent):
         else:
             self.box = 0
 
+        self.onStackPos = None
+        self.stackIndex = 0
+        self.BoxList = list()
         #property of robo
         self.uDir = DIR_UP
         self.bCarryBox = False
@@ -141,6 +145,10 @@ class CellAgent(Agent):
 
         self.model.grid.move_agent(self, pos)
         self.uDir = dir
+
+        if(len(self.BoxList) > 0):#CarryBox
+            for box in self.BoxList:
+                box.onStackPos = self.pos
 
     def findDirWander(self):
         result = None
@@ -231,14 +239,23 @@ class CellAgent(Agent):
                 cell.box -= 1
                 self.box = 1
                 self.bCarryBox = True
+                box = None
 
-                if(cell.box <= 0):
+                if(cell.box <= 0):#single box
                     cell.model.grid.remove_agent(cell)
-            elif(cell.loc_type == LOC_BOX and cell.box == 0):
+                    box = cell
+                else:#on Stack Boxes
+                    box = cell.BoxList.pop(0)
+
+                box.stackIndex = 1
+                self.BoxList.append(box)
+                box.onStackPos = self.pos
+
+            elif(cell.loc_type == LOC_BOX and cell.box == 0):#Error Condition
                 cell.model.grid.remove_agent(cell)
             else:
                 pass
-        else:
+        else:#Error Condition
             if(self.box == 0):
                 self.bCarryBox = False
             else:
@@ -251,9 +268,13 @@ class CellAgent(Agent):
                 cell.box += 1
                 self.box = 0
                 self.bCarryBox = False
+                box = self.BoxList.pop(0)
+                cell.BoxList.append(box)
+                box.stackIndex = len(cell.BoxList)
+                box.onStackPos = cell.pos
             else:
                 pass
-        else:
+        else:#Error Condition
             if(self.box == 0):
                 self.bCarryBox = False
             else:
